@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Controle de gastos</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;600;800&display=swap">
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+--bg:#eef3f0;--sf:#fff;--ink:#12302a;--mu:#5b7069;--ln:#d5e0db;--ac:#1f7a5c;--acs:#dcefe7;--wr:#b8791a;--bad:#b3402f;--bads:#f6e0dc}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f1b18;--sf:#172622;--ink:#e6f1ed;--mu:#93aaa2;--ln:#28403a;--ac:#4cc79b;--acs:#1d3a31;--wr:#e0a548;--bad:#ef7f6c;--bads:#3a211d}}
+:root[data-theme="dark"]{--bg:#0f1b18;--sf:#172622;--ink:#e6f1ed;--mu:#93aaa2;--ln:#28403a;--ac:#4cc79b;--acs:#1d3a31;--wr:#e0a548;--bad:#ef7f6c;--bads:#3a211d}
+*{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 Figtree,system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:720px;margin:0 auto;padding:16px 14px 48px}
+header{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:12px}
+h1{font-size:22px;font-weight:800;margin:0}
+.mes{display:flex;align-items:center;gap:6px}
+.mes b{min-width:130px;text-align:center;text-transform:capitalize}
+button{font:inherit;cursor:pointer;border:1px solid var(--ln);background:var(--sf);color:var(--ink);border-radius:8px;padding:8px 12px}
+button:focus-visible,input:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+button.p{background:var(--ac);border-color:var(--ac);color:#fff;font-weight:600}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]) button.p{color:#0f1b18}}
+nav{display:flex;gap:6px;overflow-x:auto;padding-bottom:8px;margin-bottom:12px}
+nav button{white-space:nowrap;padding:7px 11px;font-size:14px}
+nav button[aria-selected="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.box{background:var(--sf);border:1px solid var(--ln);border-radius:12px;padding:14px;margin-bottom:12px}
+.tot{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center}
+.tot span{display:block;font-size:12.5px;color:var(--mu)}
+.tot strong{font-size:18px;font-weight:800}
+.ok{color:var(--ac)}.neg{color:var(--bad)}
+.bar{height:8px;border-radius:6px;background:var(--acs);overflow:hidden;margin-top:6px}
+.bar i{display:block;height:100%;background:var(--ac)}
+.bar.w i{background:var(--wr)}.bar.r i{background:var(--bad)}
+.lin{display:block;width:100%;text-align:left;background:var(--sf);border:1px solid var(--ln);border-radius:12px;padding:12px 14px;margin-bottom:8px}
+.lin div{display:flex;justify-content:space-between;gap:8px}
+.lin small,.mu{color:var(--mu);font-size:13px}
+label{display:block;font-size:13px;color:var(--mu);margin-bottom:3px}
+input{font:inherit;width:100%;padding:9px 10px;border:1px solid var(--ln);border-radius:8px;background:var(--bg);color:var(--ink)}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
+.row.t{grid-template-columns:1fr}
+.it{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:9px 0;border-top:1px solid var(--ln)}
+.it:first-child{border-top:0}
+.it button{padding:4px 9px;color:var(--bad)}
+.sc{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{padding:8px 6px;text-align:right;border-bottom:1px solid var(--ln);white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+th{color:var(--mu);font-weight:600}
+h2{font-size:16px;margin:0 0 8px}
+svg text{fill:var(--mu);font-size:11px;font-family:inherit}
+svg rect{fill:var(--ac)}svg rect.cur{fill:var(--ink)}
+@media(prefers-reduced-motion:no-preference){.bar i{transition:width .3s}}
+</style>
+</head>
+<body>
+<main>
+<header><div><h1>Controle de gastos</h1><small id="st" class="mu">Só neste aparelho</small></div>
+<div class="mes"><button id="pv" aria-label="Mês anterior">‹</button><b id="ml"></b><button id="nx" aria-label="Próximo mês">›</button></div></header>
+<nav id="nav" role="tablist"></nav>
+<section id="v"></section>
+</main>
+<script>
+const CATS=[["res","Reserva para emergência"],["casa","Despesas extras"],["fixas","Despesas fixas"],["med","Medicamentos"],["transp","Transportes"],["lazer","Lazer"],["invest","Investimentos"]];
+const KEY="gastos-v1";
+let D={},mem=null;
+try{D=JSON.parse(localStorage.getItem(KEY)||"{}")}catch(e){D={}}
+function loc(){try{localStorage.setItem(KEY,JSON.stringify(D))}catch(e){}}
+let db=null,uid=null,synced={};
+function st(t){const e=document.getElementById("st");if(e)e.textContent=t}
+async function push(){if(!db)return;for(const m of Object.keys(D)){const s=JSON.stringify(D[m]);if(synced[m]===s)continue;synced[m]=s;try{await db.collection("data/users/"+uid).doc("m"+m).set(JSON.parse(s));st("Sincronizado")}catch(e){delete synced[m];st("Erro ao sincronizar")}}}
+function save(){loc();push()}
+const d0=new Date();
+let cur=d0.getFullYear()+"-"+String(d0.getMonth()+1).padStart(2,"0"),tab="resumo";
+const R=v=>(v||0).toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const P=s=>{s=String(s).trim();if(s.includes(","))s=s.replace(/\./g,"").replace(",",".");return parseFloat(s)||0};
+const shift=(m,n)=>{const [y,mo]=m.split("-").map(Number);const d=new Date(y,mo-1+n,1);return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")};
+const lab=(m,s)=>{const [y,mo]=m.split("-").map(Number);return new Date(y,mo-1,1).toLocaleDateString("pt-BR",s?{month:"short",year:"2-digit"}:{month:"long",year:"numeric"}).replace(" de "," ")};
+const M=m=>D[m]||{b:{},e:{}};
+const ensure=m=>(D[m]=D[m]||{b:{},e:{}});
+const bud=(m,c)=>M(m).b[c]||0;
+const spent=(m,c)=>(M(m).e[c]||[]).reduce((a,x)=>a+x.v,0);
+const tb=m=>CATS.reduce((a,c)=>a+bud(m,c[0]),0);
+const ts=m=>CATS.reduce((a,c)=>a+spent(m,c[0]),0);
+const cls=(b,s)=>b>0&&s>b?"r":(b>0&&s/b>=.8?"w":"");
+const pct=(b,s)=>b>0?Math.min(100,s/b*100):0;
+const left=(b,s)=>{const r=b-s;return r<0?`<span class="neg">Passou ${R(-r)}</span>`:`<span class="ok">${R(r)}</span>`};
+function nav(){
+  const t=[["resumo","Resumo"],...CATS,["rel","Relatório"]];
+  document.getElementById("nav").innerHTML=t.map(x=>`<button role="tab" data-t="${x[0]}" aria-selected="${x[0]===tab}">${x[1]}</button>`).join("");
+  document.getElementById("ml").textContent=lab(cur);
+}
+function resumo(){
+  const b=tb(cur),s=ts(cur);
+  let h=`<div class="box tot"><div><span>Valor total</span><strong>${R(b)}</strong></div><div><span>Gasto</span><strong>${R(s)}</strong></div><div><span>Ainda posso usar</span><strong>${left(b,s)}</strong></div></div>`;
+  if(!b&&!ts(cur)&&D[shift(cur,-1)])h+=`<button class="p" data-a="copy" style="margin-bottom:12px">Copiar valores de ${lab(shift(cur,-1))}</button>`;
+  h+=CATS.map(c=>{const bb=bud(cur,c[0]),ss=spent(cur,c[0]);return `<button class="lin" data-t="${c[0]}"><div><b>${c[1]}</b><b>${left(bb,ss)}</b></div><small>${R(ss)} de ${R(bb)}</small><div class="bar ${cls(bb,ss)}"><i style="width:${pct(bb,ss)}%"></i></div></button>`}).join("");
+  return h;
+}
+function categoria(id){
+  const c=CATS.find(x=>x[0]===id),b=bud(cur,id),s=spent(cur,id),L=(M(cur).e[id]||[]);
+  const today=new Date().toISOString().slice(0,10);
+  return `<div class="box"><h2>${c[1]}</h2>
+  <label for="bv">Valor cheio do mês</label><input id="bv" inputmode="decimal" placeholder="0,00" value="${b?String(b).replace(".",","):""}">
+  <div class="tot" style="margin-top:12px"><div><span>Valor cheio</span><strong>${R(b)}</strong></div><div><span>Gasto</span><strong>${R(s)}</strong></div><div><span>Resta</span><strong>${left(b,s)}</strong></div></div>
+  <div class="bar ${cls(b,s)}"><i style="width:${pct(b,s)}%"></i></div></div>
+  <div class="box"><h2>Adicionar gasto</h2>
+  <div class="row t"><div><label for="gd">Descrição</label><input id="gd" placeholder="Ex.: mercado"></div></div>
+  <div class="row"><div><label for="gv">Valor</label><input id="gv" inputmode="decimal" placeholder="0,00"></div><div><label for="gt">Data</label><input id="gt" type="date" value="${today}"></div></div>
+  <button class="p" data-a="add" data-c="${id}">Adicionar gasto</button></div>
+  <div class="box"><h2>Gastos do mês</h2>${L.length?L.map((x,i)=>`<div class="it"><div><b>${esc(x.d||"Sem descrição")}</b><div class="mu">${x.t?x.t.split("-").reverse().join("/"):""}</div></div><div>${R(x.v)} <button data-a="del" data-c="${id}" data-i="${i}" aria-label="Apagar gasto">Apagar</button></div></div>`).join(""):`<p class="mu">Nenhum gasto lançado. Preencha o valor e toque em Adicionar gasto.</p>`}</div>`;
+}
+function relatorio(){
+  const ms=Object.keys(D).filter(m=>tb(m)||ts(m)).sort();
+  if(!ms.includes(cur))ms.push(cur);ms.sort();
+  const last=ms.slice(-6),mx=Math.max(1,...last.map(ts));
+  const bw=600/last.length;
+  const svg=`<svg viewBox="0 0 600 190" width="100%" role="img" aria-label="Gasto total por mês">${last.map((m,i)=>{const h=ts(m)/mx*130;return `<rect class="${m===cur?"cur":""}" x="${i*bw+bw*.2}" y="${150-h}" width="${bw*.6}" height="${h}" rx="4"/><text x="${i*bw+bw/2}" y="170" text-anchor="middle">${lab(m,1)}</text><text x="${i*bw+bw/2}" y="${144-h}" text-anchor="middle">${Math.round(ts(m)).toLocaleString("pt-BR")}</text>`}).join("")}</svg>`;
+  const dif=(a,b)=>b?`<span class="${a>b?"neg":"ok"}">${a>b?"+":""}${((a-b)/b*100).toFixed(0)}%</span>`:"–";
+  const pm=shift(cur,-1);
+  let h=`<div class="box"><h2>Gasto total por mês</h2>${svg}</div>
+  <div class="box"><h2>${lab(cur)} comparado a ${lab(pm)}</h2><div class="sc"><table><tr><th>Categoria</th><th>Anterior</th><th>Atual</th><th>Variação</th></tr>
+  ${CATS.map(c=>`<tr><td>${c[1]}</td><td>${R(spent(pm,c[0]))}</td><td>${R(spent(cur,c[0]))}</td><td>${dif(spent(cur,c[0]),spent(pm,c[0]))}</td></tr>`).join("")}
+  <tr><td><b>Total</b></td><td><b>${R(ts(pm))}</b></td><td><b>${R(ts(cur))}</b></td><td>${dif(ts(cur),ts(pm))}</td></tr></table></div></div>
+  <div class="box"><h2>Histórico</h2><div class="sc"><table><tr><th>Mês</th><th>Valor total</th><th>Gasto</th><th>Sobrou</th></tr>
+  ${ms.slice().reverse().map(m=>`<tr><td style="text-transform:capitalize">${lab(m)}</td><td>${R(tb(m))}</td><td>${R(ts(m))}</td><td>${left(tb(m),ts(m))}</td></tr>`).join("")}</table></div></div>`;
+  return h;
+}
+function draw(){
+  nav();
+  document.getElementById("v").innerHTML=tab==="resumo"?resumo():tab==="rel"?relatorio():categoria(tab);
+}
+document.addEventListener("click",e=>{
+  const t=e.target.closest("[data-t]");
+  if(t){tab=t.dataset.t;draw();scrollTo(0,0);return}
+  const a=e.target.closest("[data-a]");if(!a)return;
+  const A=a.dataset.a,c=a.dataset.c;
+  if(A==="copy"){const p=M(shift(cur,-1)).b;ensure(cur).b={...p};save();draw()}
+  if(A==="add"){const v=P(document.getElementById("gv").value);if(v<=0){document.getElementById("gv").focus();return}
+    const m=ensure(cur);(m.e[c]=m.e[c]||[]).push({d:document.getElementById("gd").value.trim(),v,t:document.getElementById("gt").value});save();draw();document.getElementById("gd").focus()}
+  if(A==="del"){ensure(cur).e[c].splice(+a.dataset.i,1);save();draw()}
+});
+document.addEventListener("change",e=>{if(e.target.id==="bv"){ensure(cur).b[tab]=P(e.target.value);save();draw()}});
+document.addEventListener("keydown",e=>{if(e.key==="Enter"&&(e.target.id==="gv"||e.target.id==="gd")){const b=document.querySelector('[data-a="add"]');if(b)b.click()}});
+document.getElementById("pv").onclick=()=>{cur=shift(cur,-1);draw()};
+document.getElementById("nx").onclick=()=>{cur=shift(cur,1);draw()};
+draw();
+(async()=>{try{
+const c=await claude.use("db"),u=await claude.use("user");
+if(!c||!u)return;
+const id=await u.id();if(!id)return;
+db=c;uid=id;st("Conectando…");
+const tm=setTimeout(()=>st("Sem conexão com o online"),10000);
+db.collection("data/users/"+uid).onSnapshot(snap=>{
+clearTimeout(tm);let ch=false;
+snap.docs.forEach(x=>{if(!x.exists||x.id[0]!=="m")return;const m=x.id.slice(1),v=x.data(),rs=JSON.stringify({b:v.b||{},e:v.e||{}});synced[m]=rs;if(rs!==JSON.stringify(D[m]||null)){D[m]=JSON.parse(rs);ch=true}});
+if(ch){loc();draw()}
+st("Sincronizado");push();
+},()=>{clearTimeout(tm);st("Só neste aparelho")});
+}catch(e){}})();
+</script>
+</body>
+</html>
